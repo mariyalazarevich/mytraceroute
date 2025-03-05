@@ -12,9 +12,6 @@ TIMEOUT = 2.0          # Таймаут ожидания ответа (в сек
 PACKETS_PER_HOP = 3    # Количество пакетов на один шаг
 
 def checksum(source_string):
-    """
-    Вычисление контрольной суммы для ICMP заголовка
-    """
     sum = 0
     count_to = (len(source_string) // 2) * 2
     count = 0
@@ -37,9 +34,6 @@ def checksum(source_string):
     return answer
 
 def create_packet(pid):
-    """
-    Создание ICMP пакета
-    """
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, 0, pid, 1)
     data = struct.pack("d", time.time())
     checksum_value = checksum(header + data)
@@ -47,9 +41,6 @@ def create_packet(pid):
     return header + data
 
 def traceroute(dest_name):
-    """
-    Основная функция утилиты
-    """
     try:
         dest_addr = socket.gethostbyname(dest_name)
     except socket.gaierror:
@@ -59,8 +50,8 @@ def traceroute(dest_name):
     print(f"Трассировка маршрута до {dest_name} [{dest_addr}]")
     print()
 
-    pid = os.getpid() & 0xFFFF  # Идентификатор процесса
-    ttl = 1  # Начальное значение TTL
+    pid = os.getpid() & 0xFFFF
+    ttl = 1
 
     while ttl <= MAX_HOPS:
         print(f"{ttl:<3}", end="")
@@ -100,10 +91,10 @@ def traceroute(dest_name):
                     # Эхо-ответ (целевая точка достигнута)
                     rtt = (time.time() - send_time) * 1000
                     print(f" {addr[0]} ({rtt:.2f} ms) ", end="")
-                    addr = (dest_addr,)  # Обновляем адрес для завершения
+                    addr = (dest_addr,)
                     break
                 else:
-                    print(" *  ", end="")  # Неизвестный ответ
+                    print(" *  ", end="")
             except socket.error as e:
                 print(f"Ошибка сокета: {e}")
                 break
@@ -114,7 +105,6 @@ def traceroute(dest_name):
         print()
         ttl += 1
 
-        # Если достигли целевого узла
         if addr and addr[0] == dest_addr:
             print("Трассировка завершена.")
             break
