@@ -11,6 +11,7 @@ MAX_HOPS = 30          # Максимальное количество узло�
 TIMEOUT = 2.0          # Таймаут ожидания ответа (в секундах)
 PACKETS_PER_HOP = 3    # Количество пакетов на один шаг
 
+
 def checksum(source_string):
     sum = 0
     count_to = (len(source_string) // 2) * 2
@@ -33,12 +34,14 @@ def checksum(source_string):
     answer = answer >> 8 | (answer << 8 & 0xFF00)
     return answer
 
+
 def create_packet(pid):
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, 0, pid, 1)
     data = struct.pack("d", time.time())
     checksum_value = checksum(header + data)
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(checksum_value), pid, 1)
     return header + data
+
 
 def traceroute(dest_name):
     try:
@@ -55,6 +58,10 @@ def traceroute(dest_name):
 
     while ttl <= MAX_HOPS:
         print(f"{ttl:<3}", end="")
+
+        hop_ip = None  # IP-адрес текущего узла
+        rtt_list = []  # Время отклика для каждого из трех пакетов
+
         for _ in range(PACKETS_PER_HOP):
             # Создание сырого сокета для отправки и получения ICMP
             try:
@@ -76,38 +83,43 @@ def traceroute(dest_name):
                 # Ожидание ответа
                 ready = select.select([recv_socket], [], [], TIMEOUT)
                 if not ready[0]:
-                    print(" *  ", end="")
+                    rtt_list.append("*")  # Время отклика отсутствует
                     continue
 
                 recv_packet, addr = recv_socket.recvfrom(512)
                 icmp_header = recv_packet[20:28]
                 icmp_type, icmp_code, _, recv_pid, _ = struct.unpack("bbHHh", icmp_header)
 
-                if icmp_type == ICMP_TIME_EXCEEDED:
-                    # Ответ "Time Exceeded" от промежуточного маршрутизатора
+                if icmp_type == ICMP_TIME_EXCEEDED or (icmp_type == 0 and recv_pid == pid):
                     rtt = (time.time() - send_time) * 1000
-                    print(f" {addr[0]} ({rtt:.2f} ms) ", end="")
-                elif icmp_type == 0 and recv_pid == pid:
-                    # Эхо-ответ (целевая точка достигнута)
-                    rtt = (time.time() - send_time) * 1000
-                    print(f" {addr[0]} ({rtt:.2f} ms) ", end="")
-                    addr = (dest_addr,)
-                    break
+                    rtt_list.append(f"{rtt:.2f} ms")
+                    hop_ip = addr[0]
+                    if icmp_type == 0 and recv_pid == pid:
+                        break
                 else:
-                    print(" *  ", end="")
-            except socket.error as e:
-                print(f"Ошибка сокета: {e}")
-                break
+                    rtt_list.append("*")
+            except socket.error:
+                rtt_list.append("*")
             finally:
                 send_socket.close()
                 recv_socket.close()
 
+        # Вывод IP и RTT
+        if hop_ip:
+            print(f" {hop_ip:<15}", end="")
+        else:
+            print(" *", end="")
+
+        for rtt in rtt_list:
+            print(f" {rtt:<8}", end="")
+
         print()
         ttl += 1
 
-        if addr and addr[0] == dest_addr:
+        if hop_ip == dest_addr:
             print("Трассировка завершена.")
             break
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
